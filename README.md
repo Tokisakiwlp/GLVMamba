@@ -1,4 +1,4 @@
-# GLSPNet
+# GLVMamba
 
 ## Environment
 pip install -r requirements.txt
