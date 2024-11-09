@@ -234,39 +234,6 @@ class PatchMerging2D(nn.Module):
 
         return x
 
-
-
-# class PatchExpand(nn.Module):
-#     def __init__(self, dim, dim_scale=2, norm_layer=nn.LayerNorm):
-#         super().__init__()
-#         # self.dim = dim
-#         self.dim_scale = dim_scale
-#         self.conv = nn.Conv2d(dim, dim // dim_scale, 1, 1, 0, bias=False)
-
-#         # # Assuming dim_scale is 2, which means increasing spatial dimensions by a factor of 2
-#         # if dim_scale == 2:
-#         #     self.pixel_shuffle = nn.PixelShuffle(upscale_factor=2)
-#         #     # Adjusting the number of channels after pixel shuffle
-#         #     self.adjust_channels = nn.Conv2d(dim // 4, dim // dim_scale, kernel_size=1, stride=1, padding=0, bias=False)
-#         # else:
-#         #     # If no scaling is needed, use an identity mapping
-#         #     self.pixel_shuffle = nn.Identity()
-#         #     self.adjust_channels = nn.Identity()
-
-#         # self.norm = norm_layer(dim // dim_scale)
-
-#     def forward(self, x):
-#         # Pixel shuffle expects the input in the format (B, C, H, W)
-#         x = rearrange(x, 'b h w c -> b c h w')
-#         if self.dim_scale == 2:
-#             x = F.interpolate(x, scale_factor=self.dim_scale, mode='bilinear', align_corners=True)
-#             x = self.conv(x)
-#         # else:
-#         #     x = F.interpolate(x, scale_factor=self.dim_scale, mode='bilinear', align_corners=True)
-
-#         x = rearrange(x, 'b c h w -> b h w c')
-#         return x
-    
 class PatchExpand(nn.Module):
     def __init__(self, dim, dim_scale=2, norm_layer=nn.LayerNorm):
         super().__init__()
@@ -293,50 +260,6 @@ class PatchExpand(nn.Module):
         x = rearrange(x, 'b c h w -> b h w c')
         x = self.norm(x)
         return x
-    
-# class PatchExpand(nn.Module):
-#     def __init__(self, dim, dim_scale=2, norm_layer=nn.LayerNorm):
-#         super().__init__()
-#         self.dim = dim
-
-#         self.expand = nn.Linear(
-#             dim, 2*dim, bias=False) if dim_scale == 2 else nn.Identity()
-        
-#         self.norm = norm_layer(dim // dim_scale)
-
-#     def forward(self, x):
-
-#         x = self.expand(x)
-
-#         B, H, W, C = x.shape
-
-#         x = rearrange(x, 'b h w (p1 p2 c)-> b (h p1) (w p2) c', p1=2, p2=2, c=C//4)
-#         x= self.norm(x)
-        return x
-
-
-# class FinalPatchExpand_X4(nn.Module):
-#     def __init__(self, dim, dim_scale=4, norm_layer=nn.LayerNorm):
-#         super().__init__()
-#         # self.dim = dim
-#         # self.dim_scale = dim_scale
-#         # # Assuming dim_scale is 2, which means increasing spatial dimensions by a factor of 2
-#         # if dim_scale == 4:
-#         #     self.pixel_shuffle = nn.PixelShuffle(upscale_factor=4)
-#         #     # Adjusting the number of channels after pixel shuffle
-#         #     self.adjust_channels = nn.Conv2d(dim // 16, dim, kernel_size=1, stride=1, padding=0, bias=False)
-#         # else:
-#         #     # If no scaling is needed, use an identity mapping
-#         #     self.pixel_shuffle = nn.Identity()
-#         #     self.adjust_channels = nn.Identity()            
-#         # self.norm = norm_layer(dim)
-
-#     def forward(self, x):
-#         x = rearrange(x, 'b h w c -> b c h w')
-#         x = F.interpolate(x, scale_factor=4, mode='bilinear', align_corners=True)
-#         x = rearrange(x, 'b c h w -> b h w c')
-#         return x
-    
 
 class FinalPatchExpand_X4(nn.Module):
     def __init__(self, dim, dim_scale=4, norm_layer=nn.LayerNorm):
@@ -355,7 +278,7 @@ class FinalPatchExpand_X4(nn.Module):
         x= self.norm(x)
         return x
 
-#######Local SS2D
+
 class h_sigmoid(nn.Module):
     def __init__(self, inplace=True):
         super(h_sigmoid, self).__init__()
@@ -568,6 +491,7 @@ class ConvBN(nn.Sequential):
                       dilation=dilation, stride=stride, padding=((stride - 1) + dilation * (kernel_size - 1)) // 2),
             norm_layer(out_channels)
         )
+                     
 class LayerNorm(nn.Module):
     r""" LayerNorm that supports two data formats: channels_last (default) or channels_first. 
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
@@ -604,9 +528,7 @@ class Local_SS2D(nn.Module):
         self.post_norm = LayerNorm(dim, eps=1e-6, data_format='channels_first')
         self.mff = shiftedBlock(
             dim=dim, mlp_ratio=1, drop=0., drop_path=0, norm_layer=nn.BatchNorm2d, shift_size=4)
-        ###idea###
         self.mlp = shiftmlp(in_features=dim // 2, hidden_features=2 * dim , act_layer=nn.GELU, drop=0., shift_size=4)
-        ####
         self.SS2D = SS2D(d_model=dim // 2, dropout=dropout, d_state=d_state)
         self.apply(self._init_weights)
 
@@ -628,11 +550,7 @@ class Local_SS2D(nn.Module):
     def forward(self, x):
         x = self.pre_norm(x)
         x1, x2 = torch.chunk(x, 2, dim=1)
-        # x1 = self.dw(x1)
-        #####
         x1_local = self.local1(x1) + self.local2(x1)
-        #####
-
         B, C, a, b = x2.shape
 
         x2 = x2.permute(0, 2, 3, 1).contiguous()
@@ -640,17 +558,11 @@ class Local_SS2D(nn.Module):
         x2 = self.SS2D(x2)
 
         x2 = x2.permute(0, 3, 1, 2).contiguous()
-
-        # x = torch.cat([x1.unsqueeze(2), x2.unsqueeze(2)], dim=2).reshape(B, 2 * C, a, b)
-        ######
-        # x = torch.cat([x1_local.unsqueeze(2), x2.unsqueeze(2)], dim=2).reshape(B, 2 * C, a, b)
-        # x = self.mff(x)
         x = self.mlp(x1_local,x2)
         x = self.mff(x)  
-        #####
         x = self.post_norm(x)
         return x 
-###########################################
+
 class SS2D(nn.Module):
     def __init__(
         self,
@@ -936,22 +848,13 @@ class SS2D(nn.Module):
 
         xz = self.in_proj(x)
         x, z = xz.chunk(2, dim=-1) # (b, h, w, d)
-        #############去掉注意力
-        # z = z.permute(0, 3, 1, 2).contiguous()
-        
-        # z = self.channel_attention(z) * z
-        # z = self.spatial_attention(z) * z
-        # z = z.permute(0, 2, 3, 1).contiguous()
-        ###Vmamba原来的linear操作
-        ###############
 
         x = x.permute(0, 3, 1, 2).contiguous()
         x = self.act(self.conv2d(x)) # (b, d, h, w)
 
         y = self.forward_core(x, layer)
-        ###########
         y = y * F.silu(z)
-        ###########
+
 
         out = self.out_proj(y)
         if self.dropout is not None:
@@ -985,14 +888,11 @@ class VSSBlock(nn.Module):
         
     def forward(self, input: torch.Tensor):
         input_x = self.down(input)
-        input_x = input_x + self.drop_path(self.self_attention(self.ln_1(input_x), self.layer)) #origin
-        ##########local_ss2d
-        # input_x_ln = self.ln_1(input_x)
-        # input_x_ln = torch.permute(input_x_ln,(0,3,1,2)).contiguous()
-        # input_x = torch.permute(input_x,(0,3,2,1)).contiguous()
-        # input_x = input_x + self.drop_path(self.local(input_x_ln))
-        # input_x = torch.permute(input_x,(0,2,3,1)).contiguous()
-        ############
+        input_x_ln = self.ln_1(input_x)
+        input_x_ln = torch.permute(input_x_ln,(0,3,1,2)).contiguous()
+        input_x = torch.permute(input_x,(0,3,2,1)).contiguous()
+        input_x = input_x + self.drop_path(self.local(input_x_ln))
+        input_x = torch.permute(input_x,(0,2,3,1)).contiguous()
         x = self.up(input_x) + input
         return x
     
@@ -1148,8 +1048,6 @@ class Conv(nn.Sequential):
                       dilation=dilation, stride=stride, padding=((stride - 1) + dilation * (kernel_size - 1)) // 2)
         )
 
-
-###############my_fusion#########
 class SELayer(nn.Module):
     def __init__(self, channel, reduction=16):
         super(SELayer, self).__init__()
@@ -1166,96 +1064,6 @@ class SELayer(nn.Module):
         y = self.avg_pool(x).view(b, c)
         y = self.fc(y).view(b, c, 1, 1)
         return x * y.expand_as(x)
-
-class ChannelAttentionModule(nn.Module):
-    def __init__(self, in_channels, reduction=16):
-        super(ChannelAttentionModule, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-        self.fc = nn.Sequential(
-            nn.Conv2d(in_channels, in_channels // reduction, 1, bias=False),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(in_channels // reduction, in_channels, 1, bias=False)
-        )
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = self.fc(self.avg_pool(x))
-        max_out = self.fc(self.max_pool(x))
-        out = avg_out + max_out
-        return self.sigmoid(out)
-
-class SpatialAttentionModule(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttentionModule, self).__init__()
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=kernel_size//2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)   
-    
-class Fusion(nn.Module):
-    def __init__(self, in_channels=128,decode_channels=256, num_groups=4):
-        super(Fusion, self).__init__()
-        self.down_o = Conv(decode_channels, in_channels, kernel_size=1)
-        self.se = SELayer(in_channels)
-        self.spatial_attention = SpatialAttentionModule()
-        self.channel_attention = ChannelAttentionModule(decode_channels)  
-        self.num_groups = num_groups
-        
-    def forward(self, x, res):
-        x_shape = torch.permute(x,(0,3,1,2)).contiguous()
-        res_shape = torch.permute(res,(0,3,1,2)).contiguous()
-        output_cat = torch.cat([x_shape, res_shape], dim=1)
-        output_cat_c = output_cat * self.channel_attention(output_cat)
-        output_cat_s = output_cat_c * self.spatial_attention(output_cat_c)
-        output_cat_fused = self.down_o(output_cat_s)
-        x = torch.permute(output_cat_fused,(0,2,3,1)).contiguous()
-        return x
-# class GFusion(nn.Module):
-#     def __init__(self, dim_in=192, dim_out = 96, group = 4 , factor = 4):
-#         super(GFusion, self).__init__()
-#         self.num_groups = group
-#         dim = int(dim_in // factor)
-#         self.spatial_attention = SpatialAttentionModule()
-#         self.channel_attention = ChannelAttentionModule(dim)    
-#         self.down = nn.Conv2d(dim_in, dim, kernel_size=1, stride=1)
-#         self.conv_3x3 = nn.Conv2d(dim, dim, kernel_size=3, stride=1, padding=1)
-#         self.conv_5x5 = nn.Conv2d(dim, dim, kernel_size=5, stride=1, padding=2)
-#         self.conv_7x7 = nn.Conv2d(dim, dim, kernel_size=7, stride=1, padding=3)
-#         self.up = nn.Conv2d(dim, dim_in, kernel_size=1, stride=1)
-#         self.down_o = nn.Conv2d(dim_out, dim, kernel_size=1, stride=1)
-#         self.up_o = nn.Conv2d(dim, dim_out, kernel_size=1, stride=1)
-#     def forward(self, x,y):
-#         x_shape = torch.permute(x,(0,3,1,2)).contiguous()
-#         y_shape = torch.permute(y,(0,3,1,2)).contiguous()
-#         y_fused = self.down(y_shape)
-#         y_3x3 = self.conv_3x3(y_fused)
-#         y_5x5 = self.conv_5x5(y_fused)
-#         y_7x7 = self.conv_7x7(y_fused)
-#         y_fused_s = y_3x3 + y_5x5 + y_7x7
-#         y_fused_s = y_fused_s * self.spatial_attention(y_fused_s)
-#         y_fused_o = self.up(y_fused_s)
-#         # 将拆分后的变量两两拼接
-#         x_groups = torch.chunk(x_shape, self.num_groups, dim=1)
-#         y_groups = torch.chunk(y_fused_o, self.num_groups, dim=1)
-#         # y_groups = torch.chunk(y_shape, self.num_groups, dim=1)
-#         concatenated_groups = []
-#         for i in range(self.num_groups):
-#             concatenated_group = torch.cat((x_groups[i], y_groups[i]), dim=1)
-#             concatenated_groups.append(concatenated_group)
-#         output_cat = torch.cat(concatenated_groups, dim=1)
-#         output_cat_fused = self.down_o(output_cat)
-#         output_cat_fused_c = output_cat_fused * self.channel_attention(output_cat_fused)
-#         out = self.up_o(output_cat_fused_c)
-#         x_out = out.permute(0,2,3,1)
-#         return x_out
-    
-######################
 
 class VSSM(nn.Module):
     def __init__(self, patch_size=4, in_chans=1, num_classes=4, depths=[2, 2, 9, 2], 
@@ -1329,49 +1137,7 @@ class VSSM(nn.Module):
             print("---final upsample expand_first---")
             self.up = FinalPatchExpand_X4(dim_scale=4,dim=self.embed_dim)
             self.output = nn.Conv2d(in_channels=self.embed_dim, out_channels=self.num_classes,kernel_size=1, bias=False)
-
-        #去除多层损失
-        # if self.training:
-        #     self.conv4 = nn.Conv2d(base_dims * 2, num_classes, 1, bias=False)
-        #     self.conv3 = nn.Conv2d(base_dims, num_classes, 1, bias=False)
-        #     self.conv2 = nn.Conv2d(base_dims, num_classes, 1, bias=False)
-            
-
-
-        ####################mine#############
-        # self.GF1 = GFusion(256, 512)
-        # self.GF2 = GFusion(128, 256)
-        # self.GF3 = GFusion(64, 128)
-        # self.Block_GLTB1 = Block_GLTB(dim=256, num_heads=8, window_size=8) 
-        # self.Block_GLTB2 = Block_GLTB(dim=128, num_heads=8, window_size=8)
-        # self.Block_GLTB3 = Block_GLTB(dim=64, num_heads=8, window_size=8)
-        # self.convaspp = build_convaspp(dim_in = 512, dim_out= 512)
         self.tmf = TMFblock(512)
-
-        # self.WF1 = WF(256,64,64 // 4,1,64)
-        # self.WF2 = WF(128,64,64 // 4,1,64)
-
-
-        # self.WF43 = WF(512,256)
-        # self.WF23 = WF(128,256,scale_factor=0.5)
-        # self.WF13 = WF(64,256,scale_factor=0.25)
-        # self.conv3 = Conv(768,256,1)
-
-        # self.WF42 = WF(512,128,scale_factor=4)
-        # self.WF32 = WF(256,128,scale_factor=2)
-        # self.WF12 = WF(64,128,scale_factor=0.5)
-        # self.conv2 = Conv(384,128,1)
-
-        # self.WF41 = WF(512,64,scale_factor=8)
-        # self.WF31 = WF(256,64,scale_factor=4)
-        # self.WF21 = WF(128,64,scale_factor=2)
-        # self.conv1 = Conv(192,64,1)
-
-        # self.GF1 = Fusion(256, 512)
-        # self.GF2 = Fusion(128, 256)
-        # self.GF3 = Fusion(64, 128)
-        #####################################
-
         self.apply(self._init_weights)
 
 
@@ -1407,12 +1173,6 @@ class VSSM(nn.Module):
         x = self.norm(x)  # B H W C
         return x, x_downsample
 
-    # def forward_backbone(self, x):
-    #     x = self.patch_embed(x)
-
-    #     for layer in self.layers:
-    #         x = layer(x)
-    #     return x
 
     #Dencoder and Skip connection
     def forward_up_features(self, x, x_downsample, h, w):
@@ -1424,56 +1184,9 @@ class VSSM(nn.Module):
                 x = torch.cat([x, x_downsample[3-inx]],-1)
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
-                # if inx == 1:
-                #     # low = self.WF1(x_downsample[4-inx],x_downsample[3-inx])
-                #     # x = self.GF1(x,low)
-                #     x = self.GF1(x,x_downsample[3-inx])
-                #     # x = torch.cat([x, x_downsample[3-inx]],-1)
-                #     # x = self.concat_back_dim[inx](x)
-                #     # x = torch.permute(x, (0,3,1,2)).contiguous()
-                #     # x = self.Block_GLTB1(x)
-                #     # x = torch.permute(x, (0,2,3,1)).contiguous()
-                #     x = layer_up(x)
-                # if inx == 2:
-                #     # low = self.WF2(x_downsample[4-inx],x_downsample[3-inx])
-                #     # x = self.GF2(x,low)
-                #     x = self.GF2(x,x_downsample[3-inx])
-                #     # x = torch.cat([x, x_downsample[3-inx]],-1)
-                #     # x = self.concat_back_dim[inx](x)
-                #     # x = torch.permute(x, (0,3,1,2)).contiguous()
-                #     # x = self.Block_GLTB2(x)
-                #     # x = torch.permute(x, (0,2,3,1)).contiguous()
-                #     x = layer_up(x)
-                # if inx == 3:
-                #     # low = self.WF3(x_downsample[4-inx],x_downsample[3-inx])
-                #     # x = self.GF3(x,low)
-                #     x = self.GF3(x,x_downsample[3-inx])
-                #     # x = torch.cat([x, x_downsample[3-inx]],-1)
-                #     # x = self.concat_back_dim[inx](x)
-                #     # x = torch.permute(x, (0,3,1,2)).contiguous()
-                #     # x = self.Block_GLTB3(x)
-                #     # x = torch.permute(x, (0,2,3,1)).contiguous()
-                #     x = layer_up(x)
-            ##去除多层损失
-            # if self.training and inx == 1:
-            #     tmp = torch.permute(x, (0,3,1,2)).contiguous()
-            #     h4 = self.conv4(tmp)
-            # if self.training and inx == 2:
-            #     tmp = torch.permute(x, (0,3,1,2)).contiguous()
-            #     h3 = self.conv3(tmp)
-            # if self.training and inx == 3:
-            #     tmp = torch.permute(x, (0,3,1,2)).contiguous()
-            #     h2 = self.conv2(tmp)
         
         if self.training:
-            ###去除多层损失
-            # ah = [h2, h3, h4]
-            # #
             x = self.norm_up(x)  # B H W C
-            # return x, ah
-            return x
-        else:
-            x = self.norm_up(x)  # B H W C    
             return x
         
     def up_x4(self, x, h, w):
@@ -1483,110 +1196,28 @@ class VSSM(nn.Module):
         x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=False)
         return x
 
-    # def forward_downfeatures(self, x_downsample):
-    #     x_down_last = x_downsample[-1]
-    #     x_4 = x_downsample[-2]
-    #     x_3 = x_downsample[-3]
-    #     x_2 = x_downsample[-4]
-
-    #     x_4 = torch.permute(x_4,(0,3,1,2)).contiguous()
-    #     x_3 = torch.permute(x_3,(0,3,1,2)).contiguous()
-    #     x_2 = torch.permute(x_2,(0,3,1,2)).contiguous()
-
-
-    #     x_down_4 = self.WF1(x_4,x_2)
-    #     x_down_3 = self.WF2(x_3,x_2)
-    #     x_down_2 = x_2
-
-    #     x_down_4 = torch.permute(x_down_4,(0,2,3,1)).contiguous()
-    #     x_down_3 = torch.permute(x_down_3,(0,2,3,1)).contiguous()
-    #     x_down_2 = torch.permute(x_down_2,(0,2,3,1)).contiguous()
-
-    #     # x_down_43 = self.WF43(x_down_last,x_4)
-    #     # x_down_23 = self.WF23(x_3,x_4)
-    #     # x_down_13 = self.WF13(x_2,x_4)
-    #     # x_down_4 = torch.cat([x_down_43,x_down_23,x_down_13],dim=-1)
-    #     # x_down_4 = torch.permute(x_down_4,(0,3,1,2)).contiguous()
-    #     # x_down_4 = self.conv3(x_down_4)
-    #     # x_down_4 = torch.permute(x_down_4,(0,2,3,1)).contiguous()
-
-        
-    #     # x_down_42 = self.WF42(x_down_last,x_3)
-    #     # x_down_32 = self.WF32(x_4,x_3)
-    #     # x_down_12 = self.WF12(x_2,x_3)
-    #     # x_down_3 = torch.cat([x_down_42,x_down_32,x_down_12],dim=-1)
-    #     # x_down_3 = torch.permute(x_down_3,(0,3,1,2)).contiguous()
-    #     # x_down_3 = self.conv2(x_down_3)
-    #     # x_down_3 = torch.permute(x_down_3,(0,2,3,1)).contiguous()
-
-    #     # x_down_41 = self.WF41(x_down_last,x_2)
-    #     # x_down_31 = self.WF31(x_4,x_2)
-    #     # x_down_21 = self.WF21(x_3,x_2)
-    #     # x_down_2 = torch.cat([x_down_41,x_down_31,x_down_21],dim=-1)
-    #     # x_down_2 = torch.permute(x_down_2,(0,3,1,2)).contiguous()
-    #     # x_down_2 = self.conv1(x_down_2)
-    #     # x_down_2 = torch.permute(x_down_2,(0,2,3,1)).contiguous()
-
-
-    #     return [x_down_2, x_down_3, x_down_4, x_down_last]
     
     def forward_resnet(self, x):
         h, w = x.size()[-2:]
         res1, res2, res3, res4 = self.backbone(x)
-        ######bdout######
-        # out1 = self.ba_1(res1, res2)
-        # out2 = self.ba_2(out1, res3)
-        # out3 = self.ba_3(out2, res4)
-        # out = self.dropout(out3)
-        # bd_out = out.permute(0,2,3,1).contiguous()
-        ########
-
         res1 = res1.permute(0,2,3,1).contiguous()
         res2 = res2.permute(0,2,3,1).contiguous()
         res3 = res3.permute(0,2,3,1).contiguous()
         res4 = res4.permute(0,2,3,1).contiguous()
         x_downsample = [res1, res2, res3, res4]
-        # x = res4
         res4_tmf = self.tmf(res4.permute(0,3,1,2).contiguous())
         res4_tmf = res4_tmf.permute(0,2,3,1).contiguous()
         x = res4_tmf
-        # ####################
         return x, x_downsample
         # return x, x_downsample, bd_out
     
     def forward(self, x):
         b, c, h, w = x.size()
-        x, x_downsample = self.forward_resnet(x) #origin    
-        # x, x_downsample,bd_out = self.forward_resnet(x)     
-        # x_downsample = self.forward_downfeatures(x_downsample) #noMSAA
+        x, x_downsample = self.forward_resnet(x)
         if self.training:
-            ###去除多层损失
-            # x, ah = self.forward_up_features(x,x_downsample, h, w)
-            # x = self.up_x4(x, h, w)
-            # return x, ah
-            ####
             x = self.forward_up_features(x,x_downsample, h, w) 
             x = self.up_x4(x, h, w)
-            return x
-            # x = self.forward_up_features(x,x_downsample, h, w)
-            # out = torch.cat([x, bd_out],dim=-1)
-            # out = out.permute(0,3,1,2).contiguous()
-            # out = self.finalconv(out)
-            # out = out.permute(0,2,3,1).contiguous()
-            # x = self.up_x4(out, h, w)
-            # return x
-        else:
-            x = self.forward_up_features(x,x_downsample,h,w)
-            x = self.up_x4(x, h, w)
-            return x
-            # x = self.forward_up_features(x,x_downsample, h, w)
-            # out = torch.cat([x, bd_out],dim=-1)
-            # out = out.permute(0,3,1,2).contiguous()
-            # out = self.finalconv(out)
-            # out = out.permute(0,2,3,1).contiguous()
-            # x = self.up_x4(out, h, w)
-            # return x
-    
+            return x  
 
     def flops(self, shape=(3, 224, 224)):
         # shape = self.__input_shape__[1:]
