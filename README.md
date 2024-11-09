@@ -19,24 +19,6 @@ Official implementation for GLVMamba
 │   ├── potsdam (the same with vaihingen)
 ```
 
-## Install
-```
-conda create -n RS python==3.8
-conda install cudatoolkit==11.8 -c nvidia
-pip install torch==1.10.0+cu111 torchvision==0.11.0+cu111 torchaudio==0.10.0 -f https://download.pytorch.org/whl/torch_stable.html
-conda install -c "nvidia/label/cuda-11.8.0" cuda-nvcc
-conda install packaging
-cd CM-UNet
-pip install -r requirements.txt
-cd geoseg/Mamba-UNet
-cd mamba
-python setup.py install
-cd ../ ; cd causal-conv1d
-python setup.py install
-```
-
-
-
 
 ## Acknowledgement
 
