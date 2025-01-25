@@ -4,6 +4,9 @@ Official implementation for GLVMamba
 ## Datasets
   - [ISPRS Vaihingen and Potsdam](https://www.isprs.org/education/benchmarks/UrbanSemLab/default.aspx) 
 
+## Environment
+python==3.8 torch==1.10.0
+pip install -r requirements.txt
 
 ## Folder Structure
 ```none
