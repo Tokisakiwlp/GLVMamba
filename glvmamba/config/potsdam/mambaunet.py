@@ -38,8 +38,8 @@ args = SimpleNamespace(**args)
 # training hparam
 max_epoch = 100
 ignore_index = len(CLASSES)
-train_batch_size = 16
-val_batch_size = 16
+train_batch_size = 8
+val_batch_size = 8
 lr = 6e-4
 weight_decay = 0.01
 backbone_lr = 6e-4
