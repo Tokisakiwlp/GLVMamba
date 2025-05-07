@@ -16,7 +16,7 @@ args = {
     'exp': 'ACDC/Fully_Supervised',
     'model': 'VIM',
     'num_classes': 4,
-    'cfg': '/home/phj/CM-UNet/cmunet/config/potsdam/vmamba_tiny.yaml',
+    'cfg': '/vmamba_tiny.yaml',
     'opts': None,  # This is a list and will be None by default
     'zip': False,  # False by default, true if --zip is used
     'cache_mode': 'part',  # Default is 'part'
